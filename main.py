@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import time
 import uuid
 import logging
+from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request, status
 from sqlmodel import Session, create_engine, select
@@ -14,8 +15,16 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/banking_db")
 engine = create_engine(DATABASE_URL, echo=True)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+log_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+log_file = "banking_server.log"
+file_handler = RotatingFileHandler(log_file, maxBytes=500*1024*1024, backupCount=2)
+file_handler.setFormatter(log_formatter)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(log_formatter)
 logger = logging.getLogger("banking_server")
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
