@@ -13,9 +13,11 @@ import httpx
 
 
 def _server_urls(value: str | None) -> list[str]:
-    urls = [item.strip().rstrip("/") for item in (value or "").split(",") if item.strip()]
+    urls = [item.strip().rstrip("/")
+            for item in (value or "").split(",") if item.strip()]
     if not urls:
-        raise argparse.ArgumentTypeError("Set BANK_SERVER_URLS or pass --servers with one or more server VM URLs.")
+        raise argparse.ArgumentTypeError(
+            "Set BANK_SERVER_URLS or pass --servers with one or more server VM URLs.")
     return urls
 
 
@@ -34,10 +36,12 @@ def _send(
         for attempt in range(12):
             for url in urls:
                 try:
-                    response = client.request(method, url + path, json=body, params=params, headers=headers)
-                    if response.status_code < 500:
+                    response = client.request(
+                        method, url + path, json=body, params=params, headers=headers)
+                    if response.status_code < 500 and response.status_code != 503:
                         return response
-                    last_error = httpx.HTTPStatusError(f"Server returned HTTP {response.status_code}.", request=response.request,response=response)
+                    last_error = httpx.HTTPStatusError(
+                        f"Server returned HTTP {response.status_code}.", request=response.request, response=response)
                 except httpx.RequestError as error:
                     last_error = error
             if attempt < 11:
@@ -48,28 +52,33 @@ def _send(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Client for the mini banking server.")
-    parser.add_argument("--servers", default=os.getenv("BANK_SERVER_URLS"), help="Comma-separated server VM URLs; defaults to BANK_SERVER_URLS.",)
+    parser = argparse.ArgumentParser(
+        description="Client for the mini banking server.")
+    parser.add_argument("--servers", default=os.getenv("BANK_SERVER_URLS"),
+                        help="Comma-separated server VM URLs; defaults to BANK_SERVER_URLS.",)
     commands = parser.add_subparsers(dest="command", required=True)
 
     balance = commands.add_parser("balance", help="Read an account balance.")
     balance.add_argument("account")
 
     for action in ("deposit", "withdraw"):
-        command = commands.add_parser(action, help=f"{action.title()} to an account.")
+        command = commands.add_parser(
+            action, help=f"{action.title()} to an account.")
         command.add_argument("account")
         command.add_argument("amount")
 
-    transfer = commands.add_parser("transfer", help="Transfer between simulated accounts.")
-    transfer.add_argument("account")
-    transfer.add_argument("target_account")
+    transfer = commands.add_parser(
+        "transfer", help="Transfer between simulated accounts.")
+    transfer.add_argument("account", help="Source account.")
+    transfer.add_argument("target_account", help="Destination account.")
     transfer.add_argument("amount")
 
     args = parser.parse_args(argv)
     try:
         urls = _server_urls(args.servers)
         if args.command == "balance":
-            response = _send(urls, "GET", "/balance/inquiry", params={"account": args.account})
+            response = _send(urls, "GET", "/balance/inquiry",
+                             params={"account": args.account})
         else:
             payload: dict[str, Any] = {
                 "action": args.command,
@@ -78,7 +87,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
             if args.command == "transfer":
                 payload["target_account"] = args.target_account
-            response = _send(urls, "POST", "/transactions", body=payload,request_id=uuid.uuid4().hex)
+            response = _send(urls, "POST", "/transactions",
+                             body=payload, request_id=uuid.uuid4().hex)
         try:
             payload = response.json()
         except ValueError:
