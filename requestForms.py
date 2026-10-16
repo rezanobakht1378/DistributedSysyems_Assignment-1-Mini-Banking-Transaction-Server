@@ -1,10 +1,50 @@
-from pydantic import BaseModel, Field
+from decimal import Decimal
 
-class DepositWithdrawForm(BaseModel):
-    wallet_id: str
-    amount: float = Field(gt=0, description="The amount must be greater than zero")
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-class TransferForm(BaseModel):
-    source_wallet_id: str
-    wallet_id: str  # Target wallet
-    amount: float = Field(gt=0, description="The amount must be greater than zero")
+
+class RequestModel(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("amount", check_fields=False)
+    @classmethod
+    def validate_amount(cls, value: Decimal | None) -> Decimal | None:
+        if value is None:
+            return value
+        if not value.is_finite() or value <= 0:
+            raise ValueError("amount must be a positive finite number")
+        if value.as_tuple().exponent < -2:
+            raise ValueError("amount must have no more than two decimal places")
+        return value
+
+
+class TransactionRequest(RequestModel):
+    action: str
+    account: str | None = None
+    amount: Decimal | None = None
+    target_account: str | None = None
+
+
+class ReplicationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: str
+    account: str
+    amount: Decimal = Field(gt=0)
+    target_account: str | None = None
+    request_id: str = Field(min_length=1, max_length=128)
+    client_ip: str = "unknown"
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, value: str) -> str:
+        if value not in {"deposit", "withdraw", "transfer"}:
+            raise ValueError("replicated action must be a balance-changing operation")
+        return value
+
+    @field_validator("amount")
+    @classmethod
+    def validate_replicated_amount(cls, value: Decimal) -> Decimal:
+        if not value.is_finite() or value.as_tuple().exponent < -2:
+            raise ValueError("amount must be a finite number with at most two decimal places")
+        return value
